@@ -13,7 +13,7 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                git 'https://github.com/Zeeshancloud15/maven01.git'
+                git branch: 'main', url: 'https://github.com/Zeeshancloud15/maven01.git'
             }
         }
 
@@ -23,17 +23,9 @@ pipeline {
             }
         }
 
-        stage('SonarQube Scan') {
-            steps {
-                sh 'mvn sonar:sonar'
-            }
-        }
-
         stage('Docker Build') {
             steps {
-                sh '''
-                docker build -t zeeshan-agency:latest .
-                '''
+                sh 'docker build -t zeeshan-agency:latest .'
             }
         }
 
@@ -47,35 +39,19 @@ pipeline {
             }
         }
 
-        stage('Tag Docker Image') {
-            steps {
-                sh '''
-                docker tag zeeshan-agency:latest $DOCKER_IMAGE
-                '''
-            }
-        }
-
         stage('Push to ECR') {
             steps {
                 sh '''
+                docker tag zeeshan-agency:latest $DOCKER_IMAGE
                 docker push $DOCKER_IMAGE
                 '''
             }
         }
 
-        stage('Deploy to Kubernetes') {
+        stage('Deploy Kubernetes') {
             steps {
-                sh '''
-                kubectl apply -f k8s-deployment.yaml
-                kubectl apply -f k8s-service.yaml
-                '''
-            }
-        }
-
-        stage('Verify Deployment') {
-            steps {
-                sh 'kubectl get pods'
-                sh 'kubectl get svc'
+                sh 'kubectl apply -f k8s-deployment.yaml'
+                sh 'kubectl apply -f k8s-service.yaml'
             }
         }
     }
