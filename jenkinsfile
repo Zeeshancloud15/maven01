@@ -1,0 +1,26 @@
+pipeline {
+ agent any
+ stages {
+ stage('Checkout') {
+ steps { git 'GIT_REPO_URL' }
+ }
+ stage('Build & Test') {
+ steps { sh 'mvn clean package' }
+ }
+ stage('SonarQube Scan') {
+ steps {
+ sh 'mvn sonar:sonar'
+ }
+ }
+ stage('Docker Build') {
+ steps { sh 'docker build -t cicd-app .' }
+ }
+ stage('Deploy') {
+ steps {
+ sh 'kubectl apply -f k8s-deployment.yaml'
+ sh 'kubectl apply -f k8s-service.yaml'
+ }
+ }
+ }
+}
+
