@@ -2,76 +2,89 @@ pipeline {
     agent any
 
     environment {
-        AWS_ACCOUNT_ID = "189598237274"
-        AWS_REGION = "us-east-1"
-        ECR_REPO = "zeeshan-agency"
+        // SonarQube token
+        SONAR_AUTH_TOKEN = 'sqa_363c7394b139dcc7be3d0665a58eace56684592c'
+        // Docker/ECR settings
+        AWS_REGION = 'us-east-1'
+        ECR_REPO = 'your-ecr-repo-name' // change to your repo
         IMAGE_TAG = "latest"
-        DOCKER_IMAGE = "189598237274.dkr.ecr.us-east-1.amazonaws.com/zeeshan-agency:latest"
     }
 
     stages {
 
-        stage('Checkout Code') {
+        stage('Checkout SCM') {
             steps {
-                git branch: 'main', url: 'https://github.com/Zeeshancloud15/maven01.git'
+                echo 'Checking out source code...'
+                checkout scm
             }
         }
 
         stage('Build Maven') {
             steps {
-                // Java 21 fix
+                echo 'Building with Maven...'
                 sh 'mvn clean package -Dmaven.compiler.source=21 -Dmaven.compiler.target=21'
             }
         }
 
         stage('SonarQube Scan') {
             steps {
-                sh 'mvn sonar:sonar -Dmaven.compiler.source=21 -Dmaven.compiler.target=21'
+                echo 'Running SonarQube analysis...'
+                sh "mvn sonar:sonar -Dsonar.login=${SONAR_AUTH_TOKEN} -Dmaven.compiler.source=21 -Dmaven.compiler.target=21"
             }
         }
 
         stage('Docker Build') {
             steps {
-                sh 'docker build -t zeeshan-agency:latest .'
+                echo 'Building Docker image...'
+                sh "docker build -t ${ECR_REPO}:${IMAGE_TAG} ."
             }
         }
 
         stage('Login AWS ECR') {
             steps {
+                echo 'Logging in to AWS ECR...'
                 sh '''
-                aws ecr get-login-password --region $AWS_REGION | \
-                docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+                aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin <your-account-id>.dkr.ecr.$AWS_REGION.amazonaws.com
                 '''
             }
         }
 
         stage('Push to ECR') {
             steps {
-                sh '''
-                docker tag zeeshan-agency:latest $DOCKER_IMAGE
-                docker push $DOCKER_IMAGE
-                '''
+                echo 'Pushing Docker image to ECR...'
+                sh "docker tag ${ECR_REPO}:${IMAGE_TAG} <your-account-id>.dkr.ecr.$AWS_REGION.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
+                sh "docker push <your-account-id>.dkr.ecr.$AWS_REGION.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
             }
         }
 
         stage('Deploy to Kubernetes') {
             steps {
-                sh 'kubectl apply -f k8s-deployment.yaml'
-                sh 'kubectl apply -f k8s-service.yaml'
+                echo 'Deploying to Kubernetes...'
+                sh '''
+                kubectl apply -f k8s-deployment.yaml
+                kubectl apply -f k8s-service.yaml
+                '''
             }
         }
 
         stage('Verify Deployment') {
             steps {
-                sh 'kubectl get pods'
-                sh 'kubectl get svc'
+                echo 'Verifying deployment...'
+                sh '''
+                kubectl get pods
+                kubectl get svc
+                '''
             }
         }
+
     }
 
     post {
-        always {
-            echo "Pipeline finished. Check logs for details."
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Check logs for details.'
         }
     }
 }
