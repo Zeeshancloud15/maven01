@@ -2,89 +2,92 @@ pipeline {
     agent any
 
     environment {
-        // SonarQube token
-        SONAR_AUTH_TOKEN = 'sqa_363c7394b139dcc7be3d0665a58eace56684592c'
-        // Docker/ECR settings
-        AWS_REGION = 'us-east-1'
-        ECR_REPO = 'your-ecr-repo-name' // change to your repo
-        IMAGE_TAG = "latest"
+        // Define project info
+        PROJECT_NAME = 'cicd-app'
+        DOCKER_IMAGE = 'cicd-app-image'
+        DOCKER_TAG = 'latest'
+        ECR_REPO = '123456789012.dkr.ecr.us-east-1.amazonaws.com/cicd-app' // replace with your ECR repo
     }
 
     stages {
 
         stage('Checkout SCM') {
             steps {
-                echo 'Checking out source code...'
-                checkout scm
+                echo 'Checking out source code from Git...'
+                git branch: 'main', url: 'https://github.com/your-repo/cicd-app.git'
             }
         }
 
         stage('Build Maven') {
             steps {
-                echo 'Building with Maven...'
-                sh 'mvn clean package -Dmaven.compiler.source=21 -Dmaven.compiler.target=21'
+                echo 'Building project with Maven...'
+                sh 'mvn clean package -DskipTests'
             }
         }
 
         stage('SonarQube Scan') {
             steps {
                 echo 'Running SonarQube analysis...'
-                sh "mvn sonar:sonar -Dsonar.login=${SONAR_AUTH_TOKEN} -Dmaven.compiler.source=21 -Dmaven.compiler.target=21"
+                // Use Jenkins credential for SonarQube token
+                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
+                    sh "mvn sonar:sonar -Dsonar.login=${SONAR_AUTH_TOKEN} -Dmaven.compiler.source=21 -Dmaven.compiler.target=21"
+                }
             }
         }
 
         stage('Docker Build') {
             steps {
                 echo 'Building Docker image...'
-                sh "docker build -t ${ECR_REPO}:${IMAGE_TAG} ."
+                sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
             }
         }
 
         stage('Login AWS ECR') {
             steps {
                 echo 'Logging in to AWS ECR...'
-                sh '''
-                aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin <your-account-id>.dkr.ecr.$AWS_REGION.amazonaws.com
-                '''
+                withCredentials([usernamePassword(credentialsId: 'AWS_CRED', usernameVariable: 'AWS_USER', passwordVariable: 'AWS_PASS')]) {
+                    sh 'aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com'
+                }
             }
         }
 
         stage('Push to ECR') {
             steps {
                 echo 'Pushing Docker image to ECR...'
-                sh "docker tag ${ECR_REPO}:${IMAGE_TAG} <your-account-id>.dkr.ecr.$AWS_REGION.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
-                sh "docker push <your-account-id>.dkr.ecr.$AWS_REGION.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
+                sh "docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${ECR_REPO}:${DOCKER_TAG}"
+                sh "docker push ${ECR_REPO}:${DOCKER_TAG}"
             }
         }
 
         stage('Deploy to Kubernetes') {
             steps {
-                echo 'Deploying to Kubernetes...'
-                sh '''
-                kubectl apply -f k8s-deployment.yaml
-                kubectl apply -f k8s-service.yaml
-                '''
+                echo 'Deploying to Kubernetes cluster...'
+                // Assuming kubeconfig is already set on Jenkins agent
+                sh "kubectl apply -f k8s/deployment.yaml"
+                sh "kubectl apply -f k8s/service.yaml"
             }
         }
 
         stage('Verify Deployment') {
             steps {
                 echo 'Verifying deployment...'
-                sh '''
-                kubectl get pods
-                kubectl get svc
-                '''
+                sh "kubectl get pods"
+                sh "kubectl get svc"
             }
         }
 
     }
 
     post {
+        always {
+            echo 'Cleaning up workspace...'
+            cleanWs()
+        }
         success {
             echo 'Pipeline completed successfully!'
         }
         failure {
-            echo 'Pipeline failed. Check logs for details.'
+            echo 'Pipeline failed. Please check the logs!'
         }
     }
 }
