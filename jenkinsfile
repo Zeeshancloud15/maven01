@@ -19,7 +19,14 @@ pipeline {
 
         stage('Build Maven') {
             steps {
-                sh 'mvn clean package'
+                // Java 21 fix
+                sh 'mvn clean package -Dmaven.compiler.source=21 -Dmaven.compiler.target=21'
+            }
+        }
+
+        stage('SonarQube Scan') {
+            steps {
+                sh 'mvn sonar:sonar -Dmaven.compiler.source=21 -Dmaven.compiler.target=21'
             }
         }
 
@@ -32,9 +39,8 @@ pipeline {
         stage('Login AWS ECR') {
             steps {
                 sh '''
-                aws ecr get-login-password --region us-east-1 | \
-                docker login --username AWS --password-stdin \
-                189598237274.dkr.ecr.us-east-1.amazonaws.com
+                aws ecr get-login-password --region $AWS_REGION | \
+                docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
                 '''
             }
         }
@@ -48,11 +54,24 @@ pipeline {
             }
         }
 
-        stage('Deploy Kubernetes') {
+        stage('Deploy to Kubernetes') {
             steps {
                 sh 'kubectl apply -f k8s-deployment.yaml'
                 sh 'kubectl apply -f k8s-service.yaml'
             }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                sh 'kubectl get pods'
+                sh 'kubectl get svc'
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "Pipeline finished. Check logs for details."
         }
     }
 }
