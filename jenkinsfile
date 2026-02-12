@@ -1,26 +1,82 @@
 pipeline {
- agent any
- stages {
- stage('Checkout') {
- steps { git 'GIT_REPO_URL' }
- }
- stage('Build & Test') {
- steps { sh 'mvn clean package' }
- }
- stage('SonarQube Scan') {
- steps {
- sh 'mvn sonar:sonar'
- }
- }
- stage('Docker Build') {
- steps { sh 'docker build -t cicd-app .' }
- }
- stage('Deploy') {
- steps {
- sh 'kubectl apply -f k8s-deployment.yaml'
- sh 'kubectl apply -f k8s-service.yaml'
- }
- }
- }
-}
+    agent any
 
+    environment {
+        AWS_ACCOUNT_ID = "189598237274"
+        AWS_REGION = "us-east-1"
+        ECR_REPO = "zeeshan-agency"
+        IMAGE_TAG = "latest"
+        DOCKER_IMAGE = "189598237274.dkr.ecr.us-east-1.amazonaws.com/zeeshan-agency:latest"
+    }
+
+    stages {
+
+        stage('Checkout Code') {
+            steps {
+                git 'https://github.com/Zeeshancloud15/maven01.git'
+            }
+        }
+
+        stage('Build Maven') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+
+        stage('SonarQube Scan') {
+            steps {
+                sh 'mvn sonar:sonar'
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh '''
+                docker build -t zeeshan-agency:latest .
+                '''
+            }
+        }
+
+        stage('Login AWS ECR') {
+            steps {
+                sh '''
+                aws ecr get-login-password --region us-east-1 | \
+                docker login --username AWS --password-stdin \
+                189598237274.dkr.ecr.us-east-1.amazonaws.com
+                '''
+            }
+        }
+
+        stage('Tag Docker Image') {
+            steps {
+                sh '''
+                docker tag zeeshan-agency:latest $DOCKER_IMAGE
+                '''
+            }
+        }
+
+        stage('Push to ECR') {
+            steps {
+                sh '''
+                docker push $DOCKER_IMAGE
+                '''
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                sh '''
+                kubectl apply -f k8s-deployment.yaml
+                kubectl apply -f k8s-service.yaml
+                '''
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                sh 'kubectl get pods'
+                sh 'kubectl get svc'
+            }
+        }
+    }
+}
