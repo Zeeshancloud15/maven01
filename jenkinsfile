@@ -2,11 +2,13 @@ pipeline {
     agent any
 
     environment {
-        // Define project info
+        // Project info
         PROJECT_NAME = 'cicd-app'
         DOCKER_IMAGE = 'cicd-app-image'
-        DOCKER_TAG = 'latest'
-        ECR_REPO = '123456789012.dkr.ecr.us-east-1.amazonaws.com/cicd-app' // replace with your ECR repo
+        DOCKER_TAG   = 'latest'
+        // Use your actual ECR repo
+        ECR_REPO     = '189598237274.dkr.ecr.us-east-1.amazonaws.com/zeeshan-agency'
+        SONAR_TOKEN  = 'sqa_98c6372414806bf45ffd18c23c076d102834c8ae'
     }
 
     stages {
@@ -28,10 +30,8 @@ pipeline {
         stage('SonarQube Scan') {
             steps {
                 echo 'Running SonarQube analysis...'
-                // Use Jenkins credential for SonarQube token
-                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
-                    sh "mvn sonar:sonar -Dsonar.login=${SONAR_AUTH_TOKEN} -Dmaven.compiler.source=21 -Dmaven.compiler.target=21"
-                }
+                // Using provided Sonar token
+                sh "mvn sonar:sonar -Dsonar.login=${SONAR_TOKEN} -Dmaven.compiler.source=21 -Dmaven.compiler.target=21"
             }
         }
 
@@ -45,9 +45,8 @@ pipeline {
         stage('Login AWS ECR') {
             steps {
                 echo 'Logging in to AWS ECR...'
-                withCredentials([usernamePassword(credentialsId: 'AWS_CRED', usernameVariable: 'AWS_USER', passwordVariable: 'AWS_PASS')]) {
-                    sh 'aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com'
-                }
+                // Use AWS CLI login (replace credentialsId if using Jenkins credentials)
+                sh "aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${ECR_REPO}"
             }
         }
 
@@ -62,7 +61,7 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 echo 'Deploying to Kubernetes cluster...'
-                // Assuming kubeconfig is already set on Jenkins agent
+                // Ensure kubeconfig is available on Jenkins agent
                 sh "kubectl apply -f k8s/deployment.yaml"
                 sh "kubectl apply -f k8s/service.yaml"
             }
