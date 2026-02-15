@@ -1,5 +1,8 @@
-# Use the generic OpenJDK 21 image
-FROM openjdk:21
+FROM ubuntu:24.04
+
+RUN apt-get update && \
+    apt-get install -y openjdk-21-jdk && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
