@@ -1,7 +1,12 @@
 welocome to my server 
 wellcome to my server from uat team
+
 hi dev team i change
 
 
+<<<<<<< HEAD
 
 "hi this is my project
+=======
+echo "welcome to my prolect"
+>>>>>>> 657f788 (dev1)
